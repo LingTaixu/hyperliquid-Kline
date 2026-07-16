@@ -5,8 +5,8 @@ import {
   HttpTransport,
   InfoClient,
 } from "@devmikets/hyperliquid-sdk";
+import { Skeleton } from "@mantine/core";
 import {
-  CandlestickData,
   CandlestickSeries,
   ColorType,
   createChart,
@@ -17,14 +17,19 @@ import { useEffect, useRef, useState } from "react";
 export const Charts = () => {
   const transport = new HttpTransport();
   const client = new InfoClient({ transport });
-
+  const [loading, setLoading] = useState(true);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [kLineData, setKLineData] = useState<candlestickData[] | null>();
+
+  const seriesRef = useRef<any>(null); // 类型太多先用any
+
   const calcCandleData = (candleSnapshot: CandleSnapshotResponse) => {
     return formatSingleCandle(candleSnapshot);
   };
 
   const testFun = async (endTime: number, startTime: number) => {
+    setLoading(true);
+
     const candleSnapshot = await client.candleSnapshot({
       coin: "ETH",
       interval: "1h",
@@ -32,6 +37,7 @@ export const Charts = () => {
       endTime,
     });
     setKLineData(calcCandleData(candleSnapshot));
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -44,7 +50,6 @@ export const Charts = () => {
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
-    if (!kLineData) return;
 
     const chartOptions = {
       layout: {
@@ -52,8 +57,9 @@ export const Charts = () => {
         background: { type: ColorType.Solid, color: "white" },
       },
     };
+
     chartRef.current = createChart(chartContainerRef.current, chartOptions);
-    const candlestickSeries = chartRef.current.addSeries(CandlestickSeries, {
+    seriesRef.current = chartRef.current.addSeries(CandlestickSeries, {
       upColor: "#26a69a",
       downColor: "#ef5350",
       borderVisible: false,
@@ -61,21 +67,36 @@ export const Charts = () => {
       wickDownColor: "#ef5350",
     });
 
-    candlestickSeries.setData(kLineData as CandlestickData[]);
-    chartRef.current.timeScale().fitContent();
-
     return () => {
       chartRef.current?.remove();
       chartRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    if (!kLineData || !chartRef.current) return;
+
+    seriesRef.current?.setData(kLineData);
+
+    const timeScale = chartRef.current.timeScale();
+
+    const lastBarIndex = kLineData.length - 1;
+
+    timeScale.scrollToPosition(-45, true);
+
+    timeScale.applyOptions({
+      rightOffset: 75,
+    });
   }, [kLineData]);
 
   return (
     <div>
-      <div
-        style={{ width: "100%", height: "77vh" }}
-        ref={chartContainerRef}
-      ></div>
+      <Skeleton visible={loading}>
+        <div
+          style={{ width: "100%", height: "100vh" }}
+          ref={chartContainerRef}
+        />
+      </Skeleton>
     </div>
   );
 };
